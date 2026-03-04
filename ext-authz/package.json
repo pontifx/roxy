@@ -1,0 +1,18 @@
+{
+  "name": "@roxy/ext-authz",
+  "version": "0.1.0",
+  "description": "Roxy external authorization service — HTTP ext_authz implementation for Envoy",
+  "main": "src/server.js",
+  "scripts": {
+    "start": "node src/server.js",
+    "dev": "node --watch src/server.js"
+  },
+  "dependencies": {
+    "express": "^4.19.2",
+    "node-fetch": "^3.3.2"
+  },
+  "engines": {
+    "node": ">=20.0.0"
+  },
+  "license": "MIT"
+}

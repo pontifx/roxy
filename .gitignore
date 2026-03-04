@@ -1,0 +1,75 @@
+# Node dependencies
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+.npm/
+.yarn-integrity
+
+# Build outputs
+dist/
+build/
+*.min.js
+
+# Environment files — never commit secrets
+.env
+.env.local
+.env.*.local
+.env.production
+
+# SQLite database files (runtime data, not source)
+*.db
+*.db-journal
+*.db-shm
+*.db-wal
+data/
+
+# TLS/SSL certificates (generate locally or in CI)
+*.pem
+*.crt
+*.key
+*.p12
+*.pfx
+certs/
+
+# Test coverage
+coverage/
+.nyc_output/
+
+# Logs
+logs/
+*.log
+
+# OS junk
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V1
+.Trashes
+ehthumbs.db
+Thumbs.db
+
+# Editor directories and files
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+
+# Docker — don't commit generated compose override files
+docker-compose.override.yml
+docker-compose.local.yml
+
+# Chrome extension build artifacts (packed CRX / ZIP)
+extension/*.crx
+extension/*.zip
+extension/*.pem
+
+# Jest
+jest.config.local.js
+
+# Redis dump (runtime)
+dump.rdb
+
+# Process manager
+.pm2/

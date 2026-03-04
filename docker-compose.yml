@@ -1,0 +1,130 @@
+# Roxy Docker Compose — Development Orchestration
+#
+# Brings up the full Roxy stack:
+#   - Envoy reverse proxy (buyer-facing, port 10000)
+#   - Session Manager API (internal API, port 3000)
+#   - ext-authz authorization sidecar (internal, port 9191)
+#   - Redis (ephemeral session state, port 6379)
+#
+# Usage:
+#   docker-compose up --build
+#   docker-compose down -v   # also removes redis-data volume
+
+version: "3.9"
+
+services:
+
+  # ─── Envoy Proxy ──────────────────────────────────────────────────────────────
+  # Receives all buyer traffic. On every request it calls ext-authz to validate
+  # the buyer's token before forwarding to the host WSS tunnel.
+  envoy:
+    build:
+      context: ./envoy
+      dockerfile: Dockerfile
+    ports:
+      - "10000:10000"   # Buyer proxy endpoint (HTTP/HTTPS CONNECT)
+      - "9901:9901"     # Envoy admin interface (stats, config dump, healthcheck)
+    depends_on:
+      - session-manager
+      - ext-authz
+    networks:
+      - roxy-net
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:9901/ready"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+
+  # ─── Session Manager ──────────────────────────────────────────────────────────
+  # Central API. Handles auth, session lifecycle, packages, bounties, earnings.
+  session-manager:
+    build:
+      context: ./session-manager
+      dockerfile: Dockerfile
+    ports:
+      - "3000:3000"
+    depends_on:
+      - redis
+    networks:
+      - roxy-net
+    environment:
+      # Override these in a .env file — never commit real secrets
+      JWT_SECRET: ${JWT_SECRET:-dev-secret-change-me-in-production}
+      JWT_TTL: ${JWT_TTL:-900}
+      REDIS_URL: redis://redis:6379
+      SQLITE_PATH: /app/data/roxy.db
+      BOUNTY_HOST_SHARE: ${BOUNTY_HOST_SHARE:-0.30}
+      SESSION_MAX_CLAIM_HOURS: ${SESSION_MAX_CLAIM_HOURS:-48}
+      NODE_ENV: ${NODE_ENV:-development}
+    volumes:
+      # Persist SQLite database across container restarts
+      - session-data:/app/data
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:3000/api/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+
+  # ─── External Authorization Service ──────────────────────────────────────────
+  # Thin HTTP service called by Envoy on every proxied request.
+  # Validates buyer token + session ownership + package quota.
+  # Kept separate from session-manager because it's on the hot path and
+  # must stay fast — no database writes, only reads from Redis.
+  ext-authz:
+    build:
+      context: ./ext-authz
+      dockerfile: Dockerfile
+    ports:
+      - "9191:9191"
+    networks:
+      - roxy-net
+    environment:
+      SESSION_MANAGER_URL: http://session-manager:3000
+      NODE_ENV: ${NODE_ENV:-development}
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:9191/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+
+  # ─── Redis ────────────────────────────────────────────────────────────────────
+  # Stores ephemeral session state: available sessions, active claims,
+  # rate counters. Data here can be lost on restart without data loss
+  # (SQLite is the source of truth for persistent data).
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+    networks:
+      - roxy-net
+    volumes:
+      - redis-data:/data
+    # Enable AOF persistence so Redis survives planned restarts without losing
+    # all active session state. Not required but prevents jarring disconnects
+    # for hosts who are live when you restart the stack.
+    command: redis-server --appendonly yes
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+
+# ─── Networks ─────────────────────────────────────────────────────────────────
+# All services share a single bridge network. ext-authz and session-manager
+# are NOT exposed to the host except for development convenience (ports above).
+# In production, remove the port mappings for ext-authz and session-manager.
+networks:
+  roxy-net:
+    driver: bridge
+
+# ─── Volumes ──────────────────────────────────────────────────────────────────
+volumes:
+  redis-data:
+    driver: local
+  session-data:
+    driver: local
