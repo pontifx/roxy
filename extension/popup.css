@@ -1,0 +1,323 @@
+/* extension/popup.css — Roxy Popup Styles
+ *
+ * Design language:
+ *   - Dark theme (#151515 base, #1E1E1E cards)
+ *   - Coral accent: #E8634A (Roxy brand color)
+ *   - Monospace numbers for earnings (creates visual stability)
+ *   - Compact 320px width, 420px max height
+ *   - Minimal shadows, border-based depth
+ */
+
+*, *::before, *::after {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+:root {
+  --bg:           #151515;
+  --bg-card:      #1E1E1E;
+  --bg-input:     #252525;
+  --border:       #2A2A2A;
+  --text:         #F0F0F0;
+  --text-muted:   #888;
+  --text-dim:     #555;
+  --accent:       #E8634A;   /* Roxy coral */
+  --accent-hover: #D4553C;
+  --green:        #4CAF7D;
+  --yellow:       #F5C842;
+  --blue:         #4A90E8;
+  --gray:         #555;
+
+  --radius:       6px;
+  --radius-sm:    4px;
+  --font-mono:    'SF Mono', 'Fira Mono', 'Consolas', monospace;
+  --font-sans:    -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
+}
+
+html {
+  font-size: 13px;
+}
+
+body {
+  width: 320px;
+  background: var(--bg);
+  color: var(--text);
+  font-family: var(--font-sans);
+  line-height: 1.5;
+  overflow: hidden;
+}
+
+/* ─── Header ───────────────────────────────────────────────────────────────────── */
+.header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 16px 10px;
+  border-bottom: 1px solid var(--border);
+}
+
+.logo {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.logo-mark {
+  width: 22px;
+  height: 22px;
+  background: var(--accent);
+  color: #fff;
+  border-radius: var(--radius-sm);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 700;
+  font-size: 14px;
+  letter-spacing: -0.5px;
+}
+
+.logo-text {
+  font-weight: 600;
+  font-size: 15px;
+  letter-spacing: -0.3px;
+}
+
+.settings-btn {
+  color: var(--text-muted);
+  text-decoration: none;
+  padding: 4px;
+  border-radius: var(--radius-sm);
+  transition: color 0.15s;
+  display: flex;
+  align-items: center;
+}
+
+.settings-btn:hover {
+  color: var(--text);
+}
+
+/* ─── Status Section ───────────────────────────────────────────────────────────── */
+.status-section {
+  padding: 14px 16px 12px;
+  border-bottom: 1px solid var(--border);
+}
+
+.status-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.status-indicator {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  flex-shrink: 0;
+  transition: background-color 0.2s;
+}
+
+.status-indicator[data-state="idle"]       { background: var(--gray); }
+.status-indicator[data-state="connecting"] { background: var(--yellow); animation: pulse 1s infinite; }
+.status-indicator[data-state="available"]  { background: var(--green); }
+.status-indicator[data-state="claimed"]    { background: var(--blue); }
+.status-indicator[data-state="active"]     { background: var(--blue); animation: pulse 1s infinite; }
+
+@keyframes pulse {
+  0%, 100% { opacity: 1; }
+  50%       { opacity: 0.4; }
+}
+
+.status-label {
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--text);
+}
+
+.session-info {
+  margin-top: 4px;
+}
+
+.session-id {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  color: var(--text-dim);
+  letter-spacing: 0.3px;
+}
+
+/* ─── Active Session ───────────────────────────────────────────────────────────── */
+.active-session {
+  padding: 10px 16px;
+  background: var(--bg-card);
+  border-bottom: 1px solid var(--border);
+}
+
+.active-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 4px;
+}
+
+.active-row:last-child { margin-bottom: 0; }
+
+.active-label {
+  font-size: 11px;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.active-value {
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--text);
+}
+
+.active-value.mono {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--text-muted);
+}
+
+/* ─── Earnings Section ─────────────────────────────────────────────────────────── */
+.earnings-section {
+  padding: 12px 16px;
+  border-bottom: 1px solid var(--border);
+}
+
+.earnings-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 8px;
+}
+
+.earning-card {
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 8px 10px;
+  text-align: center;
+}
+
+.earning-amount {
+  font-family: var(--font-mono);
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text);
+  letter-spacing: -0.5px;
+  margin-bottom: 2px;
+}
+
+.earning-label {
+  font-size: 10px;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.4px;
+}
+
+/* ─── Login Prompt ────────────────────────────────────────────────────────────── */
+.login-prompt {
+  padding: 14px 16px;
+  border-bottom: 1px solid var(--border);
+}
+
+.login-text {
+  font-size: 12px;
+  color: var(--text-muted);
+  margin-bottom: 10px;
+}
+
+.login-form {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.input {
+  background: var(--bg-input);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  color: var(--text);
+  font-family: var(--font-sans);
+  font-size: 12px;
+  padding: 7px 10px;
+  outline: none;
+  transition: border-color 0.15s;
+}
+
+.input:focus {
+  border-color: var(--accent);
+}
+
+.input::placeholder {
+  color: var(--text-dim);
+}
+
+.login-error {
+  font-size: 11px;
+  color: var(--accent);
+  background: rgba(232, 99, 74, 0.1);
+  border: 1px solid rgba(232, 99, 74, 0.3);
+  border-radius: var(--radius-sm);
+  padding: 6px 8px;
+}
+
+/* ─── Action Section ───────────────────────────────────────────────────────────── */
+.action-section {
+  padding: 12px 16px;
+}
+
+/* ─── Buttons ───────────────────────────────────────────────────────────────────── */
+.btn {
+  border: none;
+  border-radius: var(--radius);
+  cursor: pointer;
+  font-family: var(--font-sans);
+  font-size: 13px;
+  font-weight: 600;
+  padding: 9px 16px;
+  transition: background-color 0.15s, opacity 0.15s;
+  width: 100%;
+  text-align: center;
+}
+
+.btn:active {
+  opacity: 0.85;
+}
+
+.btn-primary {
+  background: var(--accent);
+  color: #fff;
+}
+
+.btn-primary:hover {
+  background: var(--accent-hover);
+}
+
+.btn-toggle {
+  background: var(--accent);
+  color: #fff;
+  position: relative;
+  overflow: hidden;
+}
+
+.btn-toggle:hover {
+  background: var(--accent-hover);
+}
+
+.btn-toggle[data-live="true"] {
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  color: var(--text-muted);
+}
+
+.btn-toggle[data-live="true"]:hover {
+  color: var(--text);
+  border-color: var(--text-dim);
+}
+
+.btn-toggle:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
