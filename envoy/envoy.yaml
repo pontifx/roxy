@@ -1,0 +1,246 @@
+# Roxy Envoy Configuration
+#
+# This file configures Envoy as the buyer-facing proxy for the Roxy marketplace.
+#
+# Traffic flow:
+#   Buyer → Envoy:10000
+#     → ext_authz filter calls ext-authz:9191/check (HTTP mode)
+#       → validates X-Roxy-Token + X-Roxy-Session
+#     → if authorized:
+#         /api/* → session-manager:3000 (marketplace API)
+#         /* → forwarded through the WSS tunnel to the host extension
+#     → if denied: 403 returned immediately
+#
+# Why HTTP ext_authz (not gRPC):
+#   gRPC requires proto compilation which adds build complexity. For v1 we use
+#   the HTTP check API which is easier to implement in plain Node.js/Express
+#   and has equivalent performance for our use case. Can be migrated to gRPC
+#   later for microsecond-level gains on the hot path.
+
+admin:
+  address:
+    socket_address:
+      address: 0.0.0.0
+      port_value: 9901
+
+static_resources:
+
+  # ─── Listeners ──────────────────────────────────────────────────────────────────
+  listeners:
+    - name: buyer_proxy_listener
+      address:
+        socket_address:
+          address: 0.0.0.0
+          port_value: 10000
+
+      filter_chains:
+        - filters:
+            - name: envoy.filters.network.http_connection_manager
+              typed_config:
+                "@type": type.googleapis.com/envoy.extensions.filters.network.http_connection_manager.v3.HttpConnectionManager
+                stat_prefix: roxy_ingress
+                codec_type: AUTO
+
+                # Preserve the original client IP in x-forwarded-for so the
+                # session manager can record approximate buyer geo.
+                use_remote_address: true
+                skip_xff_append: false
+
+                # 60s idle timeout — buyers may hold sessions open for extended
+                # recon operations. 60s is generous but prevents zombie connections.
+                common_http_protocol_options:
+                  idle_timeout: 60s
+
+                http_filters:
+                  # ── 1. Local Rate Limiter ────────────────────────────────────
+                  # Per-connection rate limiting as a first line of defense.
+                  # Fine-grained per-buyer tier limits are enforced by ext-authz
+                  # (which knows the buyer's tier). This filter acts as a global
+                  # burst guard before we even call authz.
+                  - name: envoy.filters.http.local_ratelimit
+                    typed_config:
+                      "@type": type.googleapis.com/envoy.extensions.filters.http.local_ratelimit.v3.LocalRateLimit
+                      stat_prefix: roxy_rate_limit
+                      token_bucket:
+                        max_tokens: 200
+                        tokens_per_fill: 200
+                        fill_interval: 1s
+                      filter_enabled:
+                        runtime_key: local_rate_limit_enabled
+                        default_value:
+                          numerator: 100
+                          denominator: HUNDRED
+                      filter_enforced:
+                        runtime_key: local_rate_limit_enforced
+                        default_value:
+                          numerator: 100
+                          denominator: HUNDRED
+
+                  # ── 2. External Authorization ──────────────────────────────
+                  # Envoy calls our ext-authz service on EVERY proxied request.
+                  # We use HTTP mode (not gRPC) for v1 simplicity.
+                  #
+                  # The authz service receives the original request headers and
+                  # must return 200 (allow) or 403 (deny). It can also inject
+                  # response headers that Envoy will add to the forwarded request,
+                  # which we use to stamp the hostId for routing purposes.
+                  - name: envoy.filters.http.ext_authz
+                    typed_config:
+                      "@type": type.googleapis.com/envoy.extensions.filters.http.ext_authz.v3.ExtAuthz
+                      # HTTP service mode — simpler than gRPC for v1
+                      http_service:
+                        server_uri:
+                          uri: http://ext-authz:9191
+                          cluster: ext_authz_cluster
+                          timeout: 2s   # Authz adds latency; keep this tight
+
+                        # The path on the authz service that Envoy will POST to
+                        path_prefix: /check
+
+                        # Headers from the original buyer request to forward to authz.
+                        # These are the only headers authz needs to do its job.
+                        # We intentionally DON'T forward all headers to avoid
+                        # leaking buyer request content to the authz service.
+                        authorization_request:
+                          allowed_headers:
+                            patterns:
+                              - exact: "x-roxy-token"
+                              - exact: "x-roxy-session"
+                              - exact: "x-forwarded-for"
+                              - prefix: "x-envoy"
+
+                        # Headers that ext-authz may inject into the upstream request.
+                        # We use x-roxy-host-id to stamp which host this session belongs
+                        # to — useful for session affinity and logging.
+                        authorization_response:
+                          allowed_upstream_headers:
+                            patterns:
+                              - exact: "x-roxy-host-id"
+                              - exact: "x-roxy-tier"
+                              - exact: "x-roxy-buyer-id"
+
+                      # Don't call authz for the API routes — they handle their own
+                      # JWT auth. Only proxy traffic (/* excluding /api) needs authz.
+                      # This is enforced via the route table below.
+                      failure_mode_allow: false
+
+                  # ── 3. Router ────────────────────────────────────────────────
+                  - name: envoy.filters.http.router
+                    typed_config:
+                      "@type": type.googleapis.com/envoy.extensions.filters.http.router.v3.Router
+
+                route_config:
+                  name: roxy_routes
+                  virtual_hosts:
+                    - name: roxy_vhost
+                      domains: ["*"]
+                      routes:
+                        # ── /api/* → Session Manager ───────────────────────
+                        # Marketplace API requests bypass ext_authz (Session Manager
+                        # handles JWT auth internally on these routes).
+                        # The per_filter_config disables ext_authz for this route.
+                        - match:
+                            prefix: "/api/"
+                          route:
+                            cluster: session_manager_cluster
+                            timeout: 30s
+                          typed_per_filter_config:
+                            envoy.filters.http.ext_authz:
+                              "@type": type.googleapis.com/envoy.extensions.filters.http.ext_authz.v3.ExtAuthzPerRoute
+                              disabled: true
+
+                        # ── /ws/host → Session Manager WebSocket ──────────────
+                        # Host extension WebSocket connections. Also bypasses ext_authz;
+                        # the session manager validates the token on WS upgrade.
+                        - match:
+                            prefix: "/ws/"
+                          route:
+                            cluster: session_manager_cluster
+                            timeout: 0s  # 0 = no timeout for WebSocket upgrades
+                            upgrade_configs:
+                              - upgrade_type: websocket
+                          typed_per_filter_config:
+                            envoy.filters.http.ext_authz:
+                              "@type": type.googleapis.com/envoy.extensions.filters.http.ext_authz.v3.ExtAuthzPerRoute
+                              disabled: true
+
+                        # ── Everything else → proxy pipeline ──────────────────
+                        # All other traffic is buyer proxy traffic. ext_authz runs
+                        # on these requests (default — no per_filter_config override).
+                        # After authz, traffic is forwarded to session_manager which
+                        # routes it through the host WSS tunnel.
+                        - match:
+                            prefix: "/"
+                          route:
+                            cluster: session_manager_cluster
+                            timeout: 45s
+
+  # ─── Clusters ──────────────────────────────────────────────────────────────────
+  clusters:
+    # ── Session Manager ──────────────────────────────────────────────────
+    - name: session_manager_cluster
+      type: STRICT_DNS
+      dns_lookup_family: V4_ONLY
+      connect_timeout: 5s
+      load_assignment:
+        cluster_name: session_manager_cluster
+        endpoints:
+          - lb_endpoints:
+              - endpoint:
+                  address:
+                    socket_address:
+                      address: session-manager
+                      port_value: 3000
+
+      # Circuit breaker: limit pending requests and concurrent connections to
+      # prevent the session manager from being overwhelmed during traffic spikes.
+      circuit_breakers:
+        thresholds:
+          - priority: DEFAULT
+            max_connections: 500
+            max_pending_requests: 200
+            max_requests: 500
+            max_retries: 3
+
+      # Health check to detect session-manager restarts
+      health_checks:
+        - timeout: 5s
+          interval: 10s
+          unhealthy_threshold: 3
+          healthy_threshold: 2
+          http_health_check:
+            path: /api/health
+
+    # ── ext-authz ─────────────────────────────────────────────────────────
+    - name: ext_authz_cluster
+      type: STRICT_DNS
+      dns_lookup_family: V4_ONLY
+      connect_timeout: 2s
+      load_assignment:
+        cluster_name: ext_authz_cluster
+        endpoints:
+          - lb_endpoints:
+              - endpoint:
+                  address:
+                    socket_address:
+                      address: ext-authz
+                      port_value: 9191
+
+      # Tight circuit breaker on authz — if it falls over we want to fail fast
+      # rather than queue requests. failure_mode_allow: false means all requests
+      # are denied when authz is unhealthy, which is the safe default.
+      circuit_breakers:
+        thresholds:
+          - priority: DEFAULT
+            max_connections: 100
+            max_pending_requests: 100
+            max_requests: 200
+            max_retries: 1
+
+      health_checks:
+        - timeout: 2s
+          interval: 10s
+          unhealthy_threshold: 2
+          healthy_threshold: 2
+          http_health_check:
+            path: /health
