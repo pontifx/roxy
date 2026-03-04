@@ -1,0 +1,87 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Roxy</title>
+  <link rel="stylesheet" href="popup.css">
+</head>
+<body>
+  <!-- Header -->
+  <header class="header">
+    <div class="logo">
+      <span class="logo-mark">R</span>
+      <span class="logo-text">Roxy</span>
+    </div>
+    <a href="options.html" target="_blank" class="settings-btn" title="Settings">
+      <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+        <path d="M8 10a2 2 0 100-4 2 2 0 000 4z" fill="currentColor"/>
+        <path fill-rule="evenodd" clip-rule="evenodd"
+          d="M7.34 1.5a.75.75 0 01.73 0l.96.55a.75.75 0 00.56.07l1.07-.28a.75.75 0 01.83.37l.48.84a.75.75 0 00.42.36l1.04.34a.75.75 0 01.5.71v.97a.75.75 0 00.22.53l.69.69a.75.75 0 010 1.06l-.69.69a.75.75 0 00-.22.53v.97a.75.75 0 01-.5.71l-1.04.34a.75.75 0 00-.42.36l-.48.84a.75.75 0 01-.83.37l-1.07-.28a.75.75 0 00-.56.07l-.96.55a.75.75 0 01-.73 0l-.96-.55a.75.75 0 00-.56-.07l-1.07.28a.75.75 0 01-.83-.37l-.48-.84a.75.75 0 00-.42-.36l-1.04-.34a.75.75 0 01-.5-.71v-.97a.75.75 0 00-.22-.53l-.69-.69a.75.75 0 010-1.06l.69-.69A.75.75 0 002 7.84v-.97a.75.75 0 01.5-.71l1.04-.34a.75.75 0 00.42-.36l.48-.84a.75.75 0 01.83-.37l1.07.28a.75.75 0 00.56-.07L7.34 1.5z"
+          fill="currentColor" opacity="0.5"/>
+      </svg>
+    </a>
+  </header>
+
+  <!-- Status Section -->
+  <section class="status-section">
+    <div class="status-row">
+      <div class="status-indicator" id="statusDot" data-state="idle"></div>
+      <span class="status-label" id="statusLabel">Offline</span>
+    </div>
+    <div class="session-info" id="sessionInfo" style="display:none">
+      <span class="session-id" id="sessionId"></span>
+    </div>
+  </section>
+
+  <!-- Active Session Info (shown when claimed) -->
+  <section class="active-session" id="activeSession" style="display:none">
+    <div class="active-row">
+      <span class="active-label">Buyer tier</span>
+      <span class="active-value" id="activeTier">—</span>
+    </div>
+    <div class="active-row">
+      <span class="active-label">Session ID</span>
+      <span class="active-value mono" id="activeSessionId">—</span>
+    </div>
+  </section>
+
+  <!-- Earnings Section -->
+  <section class="earnings-section">
+    <div class="earnings-grid">
+      <div class="earning-card">
+        <div class="earning-amount" id="earnToday">$0.00</div>
+        <div class="earning-label">Today</div>
+      </div>
+      <div class="earning-card">
+        <div class="earning-amount" id="earnWeek">$0.00</div>
+        <div class="earning-label">This week</div>
+      </div>
+      <div class="earning-card">
+        <div class="earning-amount" id="earnAllTime">$0.00</div>
+        <div class="earning-label">All time</div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Not logged in state -->
+  <section class="login-prompt" id="loginPrompt" style="display:none">
+    <p class="login-text">Sign in to start earning</p>
+    <div class="login-form">
+      <input type="email" id="loginEmail" placeholder="email@example.com" class="input" autocomplete="email">
+      <input type="password" id="loginPassword" placeholder="Password" class="input">
+      <div class="login-error" id="loginError" style="display:none"></div>
+      <button class="btn btn-primary" id="loginBtn">Sign In</button>
+    </div>
+  </section>
+
+  <!-- Main Action Button -->
+  <section class="action-section" id="actionSection">
+    <button class="btn btn-toggle" id="toggleBtn" data-live="false">
+      <span class="btn-label" id="toggleLabel">Go Live</span>
+    </button>
+  </section>
+
+  <script src="popup.js"></script>
+</body>
+</html>
